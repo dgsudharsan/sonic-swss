@@ -628,6 +628,38 @@ task_process_status CoppOrch::processCoppRule(Consumer& consumer)
                     }
                 }
             }
+            if (!genetlink_attribs.empty())
+            {
+                auto hostif_map = m_trap_group_hostif_map.find(m_trap_group_map[trap_group_name]);
+
+                if (hostif_map != m_trap_group_hostif_map.end())
+                {
+                    for(sai_uint32_t idx = 0; idx < genetlink_attribs.size(); idx++)
+                    {
+                        auto hostif_attr = genetlink_attribs[idx];
+                        sai_status = sai_hostif_api->set_hostif_attribute(hostif_map->second,
+                                                                          &hostif_attr);
+                        if(sai_status != SAI_STATUS_SUCCESS)
+                        {
+                            SWSS_LOG_ERROR("Failed to apply attribute[%d].id=%d to hostif for \
+                                           trap group %s, error:%d", idx, hostif_attr.id,
+                                           trap_group_name.c_str(), sai_status);
+
+                            return task_process_status::task_failed;
+                        }
+                    }
+                } 
+                else
+                {
+                    if (!genetlink_attribs.empty())
+                    {
+                        if (!createGenetlinkHostIf(trap_group_name, genetlink_attribs))
+                        {
+                            return task_process_status::task_failed;
+                        }
+                    }
+                }
+            }
 
             for (sai_uint32_t ind = 0; ind < trap_gr_attribs.size(); ind++)
             {

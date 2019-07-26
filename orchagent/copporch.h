@@ -34,6 +34,10 @@ struct copp_trap_objects
     sai_object_id_t trap_group_obj;
 };
 
+// genetlink fields
+const string copp_genetlink_name              = "genetlink_name";
+const string copp_genetlink_mcgrp_name        = "genetlink_mcgrp_name";
+
 /* TrapGroupPolicerTable: trap group ID, policer ID */
 typedef std::map<sai_object_id_t, sai_object_id_t> TrapGroupPolicerTable;
 /* TrapIdTrapObjectsTable: trap ID, copp trap objects */
@@ -57,6 +61,9 @@ protected:
     TrapGroupHostIfMap m_trap_group_hostif_map;
     TrapIdHostIfTableMap m_trapid_hostif_table_map;
 
+    TrapGroupHostIfMap m_trap_group_hostif_map;
+    TrapHostTblEntryMap m_trapId_hostTblEntry_map;
+
     void initDefaultHostIntfTable();
     void initDefaultTrapGroup();
     void initDefaultTrapIds();
@@ -76,6 +83,9 @@ protected:
     bool removeGenetlinkHostIf(std::string trap_group_name);
     bool createGenetlinkHostIfTable(std::vector<std::string> &trap_id_name_list);
     void coppProcessSflow(Consumer& consumer);
+
+    bool createGenetlinkHostIf(string trap_group_name, vector<sai_attribute_t> &hostif_attribs);
+    bool removeGenetlinkHostIf(string trap_group_name);
 
     virtual void doTask(Consumer& consumer);
 };
