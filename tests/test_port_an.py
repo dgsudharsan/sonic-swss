@@ -6,6 +6,29 @@ from swsscommon import swsscommon
 
 
 class TestPortAutoNeg(object):
+    def test_PortAutoNegForce(self, dvs, testlog):
+
+        db = swsscommon.DBConnector(0, dvs.redis_sock, 0)
+
+        tbl = swsscommon.ProducerStateTable(db, "PORT_TABLE")
+
+        fvs = swsscommon.FieldValuePairs([("autoneg","0"), ("speed", "1000")])
+
+        tbl.set("Ethernet0", fvs)
+
+        time.sleep(1)
+
+        adb = swsscommon.DBConnector(1, dvs.redis_sock, 0)
+
+        atbl = swsscommon.Table(adb, "ASIC_STATE:SAI_OBJECT_TYPE_PORT")
+        (status, fvs) = atbl.get(dvs.asicdb.portnamemap["Ethernet0"])
+        assert status == True
+
+        assert "SAI_PORT_ATTR_AUTO_NEG_MODE" in [fv[0] for fv in fvs]
+        for fv in fvs:
+            if fv[0] == "SAI_PORT_ATTR_AUTO_NEG_MODE":
+                assert fv[1] == "false"
+
     def test_PortAutoNegCold(self, dvs, testlog):
 
         db = swsscommon.DBConnector(0, dvs.redis_sock, 0)
