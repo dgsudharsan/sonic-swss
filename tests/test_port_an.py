@@ -9,25 +9,25 @@ class TestPortAutoNeg(object):
     def test_PortAutoNegForce(self, dvs, testlog):
 
         db = swsscommon.DBConnector(0, dvs.redis_sock, 0)
+        adb = dvs.get_asic_db()
 
         tbl = swsscommon.ProducerStateTable(db, "PORT_TABLE")
-
-        fvs = swsscommon.FieldValuePairs([("autoneg","0"), ("speed", "1000")])
-
+        fvs = swsscommon.FieldValuePairs([("autoneg","0")])
         tbl.set("Ethernet0", fvs)
 
-        time.sleep(1)
+        tbl = swsscommon.ProducerStateTable(db, "PORT_TABLE")
+        fvs = swsscommon.FieldValuePairs([("autoneg","1"), ("speed", "1000")])
+        tbl.set("Ethernet4", fvs)
 
-        adb = swsscommon.DBConnector(1, dvs.redis_sock, 0)
+        # validate if autoneg false is pushed to asic db when set first time
+        port_oid = adb.port_name_map["Ethernet0"]
+        expected_fields = {"SAI_PORT_ATTR_AUTO_NEG_MODE":"false"}
+        adb.wait_for_field_match("ASIC_STATE:SAI_OBJECT_TYPE_PORT", port_oid, expected_fields)
 
-        atbl = swsscommon.Table(adb, "ASIC_STATE:SAI_OBJECT_TYPE_PORT")
-        (status, fvs) = atbl.get(dvs.asicdb.portnamemap["Ethernet0"])
-        assert status == True
-
-        assert "SAI_PORT_ATTR_AUTO_NEG_MODE" in [fv[0] for fv in fvs]
-        for fv in fvs:
-            if fv[0] == "SAI_PORT_ATTR_AUTO_NEG_MODE":
-                assert fv[1] == "false"
+        # validate if autoneg true is pushed to asic db when set first time
+        port_oid = adb.port_name_map["Ethernet4"]
+        expected_fields = {"SAI_PORT_ATTR_AUTO_NEG_MODE":"true"}
+        adb.wait_for_field_match("ASIC_STATE:SAI_OBJECT_TYPE_PORT", port_oid, expected_fields)
 
     def test_PortAutoNegCold(self, dvs, testlog):
 
