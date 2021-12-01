@@ -106,6 +106,8 @@ bool OrchDaemon::init()
     gPortsOrch = new PortsOrch(m_applDb, ports_tables);
     TableConnector stateDbFdb(m_stateDb, STATE_FDB_TABLE_NAME);
     gFdbOrch = new FdbOrch(m_applDb, app_fdb_tables, stateDbFdb, gPortsOrch);
+    TableConnector stateDbBfdSessionTable(m_stateDb, STATE_BFD_SESSION_TABLE_NAME);
+    gBfdOrch = new BfdOrch(m_applDb, APP_BFD_SESSION_TABLE_NAME, stateDbBfdSessionTable);
 
     vector<string> vnet_tables = {
             APP_VNET_RT_TABLE_NAME,
