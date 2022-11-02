@@ -150,7 +150,7 @@ const sai_service_method_table_t test_services = {
     test_profile_get_next_value
 };
 
-void initSaiApi()
+void initSaiApi(bool clientSai)
 {
     SWSS_LOG_ENTER();
 
@@ -158,6 +158,11 @@ void initSaiApi()
     {
         SWSS_LOG_NOTICE("Context config file %s exists", CONTEXT_CFG_FILE);
         gProfileMap[SAI_REDIS_KEY_CONTEXT_CONFIG] = CONTEXT_CFG_FILE;
+    }
+
+    if (clientSai)
+    {
+        gProfileMap[SAI_REDIS_KEY_ENABLE_CLIENT] = "true";
     }
 
     sai_api_initialize(0, (const sai_service_method_table_t *)&test_services);
