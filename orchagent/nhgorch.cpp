@@ -261,6 +261,9 @@ void NhgOrch::doTask(Consumer& consumer)
                 if (success)
                 {
                     m_syncdNextHopGroups.erase(nhg_it);
+                    DBConnector state_db("STATE_DB", 0);
+                    Table *m_stateNhgTbl = new Table(&state_db, "NHG_MAP_TABLE");
+                    m_stateNhgTbl->del(index);
                 }
             }
         }

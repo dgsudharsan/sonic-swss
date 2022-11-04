@@ -67,7 +67,7 @@ void EcmpStatOrch::doTask(Consumer &consumer)
         }
         else if (op == DEL_COMMAND)
         {
-            SWSS_LOG_ERROR("Unsupported operation type %s\n", op.c_str());
+            handleDelCommand(key);
         }
         else
         {
@@ -76,6 +76,41 @@ void EcmpStatOrch::doTask(Consumer &consumer)
 
         consumer.m_toSync.erase(it++);
     }
+}
+
+void EcmpStatOrch::delete_nexthop_group_counters(const string &nhg_key)
+{
+    SWSS_LOG_NOTICE("Handle deleting key %s", nhg_key.c_str());
+
+    DBConnector counter_db("COUNTERS_DB", 0);
+    Table *m_counter_table = new Table(&counter_db, "COUNTERS_NHGM_NAME_MAP");
+
+    for (const auto &counter_id: counters_oid_map[nhg_key])
+    {
+        auto counter_str = sai_serialize_object_id(counter_id);
+        m_nhgm_counter_manager.clearCounterIdList(counter_id);
+        SWSS_LOG_NOTICE("Deleting counter %s", counter_str.c_str());
+        vector<FieldValueTuple> counterMapFvs;
+        m_counter_table->get("", counterMapFvs);
+        for  (auto j: counterMapFvs)
+        {
+            const auto &cfield = fvField(j);
+            const auto &cvalue = fvValue(j);
+            if (cvalue == counter_str)
+            {
+                m_counter_table->hdel("", cfield);
+                break;
+            }
+        }
+
+        if (!FlowCounterHandler::removeGenericCounter(counter_id))
+        {
+            SWSS_LOG_ERROR("Unable to remove counter id: %" PRIx64 "", counter_id);
+            continue;
+        }
+    }
+    counters_oid_map.erase(nhg_key);
+    SWSS_LOG_NOTICE("Cleard counter fo nh : %s ", nhg_key.c_str());
 }
 
 void EcmpStatOrch::create_nexthop_group_counters(const string &nhg_key, const string &oid)
@@ -125,9 +160,12 @@ void EcmpStatOrch::create_nexthop_group_counters(const string &nhg_key, const st
                     if (status != SAI_STATUS_SUCCESS)
                     {
                         SWSS_LOG_ERROR("Unable to set group member attr for oid %" PRIx64 "",nhgm_oid);
+                        return;
                     }
                     counter_str = sai_serialize_object_id(counter_id);
                     SWSS_LOG_NOTICE("counter %s nh_ip %s", counter_str.c_str(), nh_ip.c_str());
+                    
+                    counters_oid_map[nhg_key].emplace_back(counter_id);
                     if (!nh_ip.empty())
                     {
                         auto map_key = nhg_key + ":" + nh_ip; 
@@ -185,6 +223,8 @@ void EcmpStatOrch::handleSetCommand(const string& key, const vector<FieldValueTu
             {
                 sleep(5);
                 create_nexthop_group_counters(key, value);
+                sai_oid_map[key] = value;
+                
             }
         }
         catch (const exception& e)
@@ -200,3 +240,9 @@ void EcmpStatOrch::handleSetCommand(const string& key, const vector<FieldValueTu
     }
 }
 
+void EcmpStatOrch::handleDelCommand(const string& key)
+{
+    SWSS_LOG_ENTER();
+    delete_nexthop_group_counters(key);
+    sai_oid_map.erase(key);
+}
