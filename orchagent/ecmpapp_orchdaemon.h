@@ -6,16 +6,16 @@
 #include "consumertable.h"
 #include "select.h"
 
-#include "demoorch.h"
+#include "ecmpstatorch.h"
 #include <sairedis.h>
 
 using namespace swss;
 
-class DemoOrchDaemon
+class EcmpAppOrchDaemon
 {
 public:
-    DemoOrchDaemon(DBConnector *, DBConnector *, DBConnector *);
-    ~DemoOrchDaemon();
+    EcmpAppOrchDaemon(DBConnector *, DBConnector *, DBConnector *);
+    ~EcmpAppOrchDaemon();
 
     virtual bool init();
     void start();

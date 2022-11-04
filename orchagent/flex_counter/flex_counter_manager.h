@@ -30,8 +30,7 @@ enum class CounterType
     MACSEC_FLOW,
     ACL_COUNTER,
     TUNNEL,
-    HOSTIF_TRAP,
-    ROUTE,
+    FLOW_COUNTER,
 };
 
 // FlexCounterManager allows users to manage a group of flex counters.

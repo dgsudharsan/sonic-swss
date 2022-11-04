@@ -24,7 +24,7 @@ extern "C" {
 #include <sairedis.h>
 #include <logger.h>
 
-#include "demoorchdaemon.h"
+#include "ecmpapp_orchdaemon.h"
 #include "sai_serialize.h"
 #include "saihelper.h"
 #include "notifications.h"
@@ -55,7 +55,7 @@ int gBatchSize = DEFAULT_BATCH_SIZE;
 
 int main(int argc, char **argv)
 {
-    swss::Logger::linkToDbNative("demo_orch");
+    swss::Logger::linkToDbNative("ecmpAppOrch");
 
     SWSS_LOG_ENTER();
 
@@ -63,20 +63,20 @@ int main(int argc, char **argv)
     DBConnector asic_db("ASIC_DB", 0);
     DBConnector state_db("STATE_DB", 0);
 
-    DemoOrchDaemon *demoOrchDaemon = new DemoOrchDaemon(&appl_db, &asic_db, &state_db);
-    SWSS_LOG_NOTICE("--- Starting Demo Orchestration Agent ---");
+    EcmpAppOrchDaemon *ecmpAppOrchDaemon = new EcmpAppOrchDaemon(&appl_db, &asic_db, &state_db);
+    SWSS_LOG_NOTICE("--- Starting ECMP Application Orchestration Agent ---");
 
     
     initSaiApi(true);
 
 
-    if (!demoOrchDaemon->init())
+    if (!ecmpAppOrchDaemon->init())
     {
         SWSS_LOG_ERROR("Failed to initialize orchestration daemon");
         exit(EXIT_FAILURE);
     }
 
-    demoOrchDaemon->start();
+    ecmpAppOrchDaemon->start();
 
     return 0;
 }

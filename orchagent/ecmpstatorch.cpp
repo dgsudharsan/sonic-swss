@@ -1,7 +1,7 @@
 #include <sstream>
 #include <inttypes.h>
 
-#include "demoorch.h"
+#include "ecmpstatorch.h"
 #include "dbconnector.h"
 #include "flex_counter_manager.h"
 #include "flow_counter_handler.h"
@@ -17,13 +17,13 @@ using namespace std;
 using namespace swss;
 #define NHGM_TRAP_FLEX_COUNTER_GROUP "NHGM_TRAP_FLOW_COUNTER"
 
-DemoOrch::DemoOrch(DBConnector *db, string tableName):
+EcmpStatOrch::EcmpStatOrch(DBConnector *db, string tableName):
     Orch(db, tableName),
     m_nhgm_counter_manager(NHGM_TRAP_FLEX_COUNTER_GROUP, StatsMode::READ, 1000, true)
 {
 }
 
-sai_object_id_t DemoOrch::getPortOid(string key)
+sai_object_id_t EcmpStatOrch::getPortOid(string key)
 {
     DBConnector counters_db("COUNTERS_DB", 0);
     Table port_map(&counters_db, "COUNTERS_PORT_NAME_MAP");
@@ -49,7 +49,7 @@ sai_object_id_t DemoOrch::getPortOid(string key)
 }
 
 
-void DemoOrch::doTask(Consumer &consumer)
+void EcmpStatOrch::doTask(Consumer &consumer)
 {
     SWSS_LOG_ENTER();
 
@@ -78,7 +78,7 @@ void DemoOrch::doTask(Consumer &consumer)
     }
 }
 
-void DemoOrch::create_nexthop_group_counters(const string &nhg_key, const string &oid)
+void EcmpStatOrch::create_nexthop_group_counters(const string &nhg_key, const string &oid)
 {
     DBConnector asic_db("ASIC_DB", 0);
     string nhgm_table = "ASIC_STATE:SAI_OBJECT_TYPE_NEXT_HOP_GROUP_MEMBER";
@@ -135,7 +135,7 @@ void DemoOrch::create_nexthop_group_counters(const string &nhg_key, const string
                         m_counter_table->set("", nameMapFvs);
                         std::unordered_set<std::string> counter_stats;
                         FlowCounterHandler::getGenericCounterStatIdList(counter_stats);
-                        m_nhgm_counter_manager.setCounterIdList(counter_id, CounterType::HOSTIF_TRAP, counter_stats);
+                        m_nhgm_counter_manager.setCounterIdList(counter_id, CounterType::FLOW_COUNTER, counter_stats);
                     }
                 }
             } 
@@ -163,14 +163,14 @@ void DemoOrch::create_nexthop_group_counters(const string &nhg_key, const string
                     m_counter_table->set("", nameMapFvs);
                     std::unordered_set<std::string> counter_stats;
                     FlowCounterHandler::getGenericCounterStatIdList(counter_stats);
-                    m_nhgm_counter_manager.setCounterIdList(counter_id, CounterType::HOSTIF_TRAP, counter_stats);
+                    m_nhgm_counter_manager.setCounterIdList(counter_id, CounterType::FLOW_COUNTER, counter_stats);
                 }
             }
         }
     }
 }
 
-void DemoOrch::handleSetCommand(const string& key, const vector<FieldValueTuple>& data)
+void EcmpStatOrch::handleSetCommand(const string& key, const vector<FieldValueTuple>& data)
 {
     SWSS_LOG_ENTER();
 

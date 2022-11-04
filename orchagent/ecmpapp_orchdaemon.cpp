@@ -2,12 +2,12 @@
 #include <unordered_map>
 #include <chrono>
 #include <limits.h>
-#include "demoorchdaemon.h"
+#include "ecmpapp_orchdaemon.h"
 #include "logger.h"
 #include <sairedis.h>
 
 #include "sairedis.h"
-#include "demoorch.h"
+#include "ecmpstatorch.h"
 #include "table.h"
 
 using namespace std;
@@ -23,9 +23,9 @@ extern sai_object_id_t             gSwitchId;
 /*
  * Global orch daemon variables
  */
-DemoOrch *gDemoOrch;
+EcmpStatOrch *gEcmpStatOrch;
 
-DemoOrchDaemon::DemoOrchDaemon(DBConnector *applDb, DBConnector *asicDb, DBConnector *stateDb) :
+EcmpAppOrchDaemon::EcmpAppOrchDaemon(DBConnector *applDb, DBConnector *asicDb, DBConnector *stateDb) :
         m_applDb(applDb),
         m_asicDb(asicDb),
         m_stateDb(stateDb)
@@ -34,7 +34,7 @@ DemoOrchDaemon::DemoOrchDaemon(DBConnector *applDb, DBConnector *asicDb, DBConne
     m_select = new Select();
 }
 
-DemoOrchDaemon::~DemoOrchDaemon()
+EcmpAppOrchDaemon::~EcmpAppOrchDaemon()
 {
     SWSS_LOG_ENTER();
 
@@ -54,7 +54,7 @@ DemoOrchDaemon::~DemoOrchDaemon()
     delete m_select;
 }
 /* To check the port init is done or not */
-bool DemoOrchDaemon::isPortInitDone()
+bool EcmpAppOrchDaemon::isPortInitDone()
 {
     bool portInit = 0;
     long cnt = 0;
@@ -73,7 +73,7 @@ bool DemoOrchDaemon::isPortInitDone()
     return portInit;
 }
 
-void DemoOrchDaemon::initSwitchId()
+void EcmpAppOrchDaemon::initSwitchId()
 {
     string switch_table = "ASIC_STATE:SAI_OBJECT_TYPE_SWITCH";
     Table *swTable = new Table(m_asicDb, switch_table);
@@ -83,7 +83,7 @@ void DemoOrchDaemon::initSwitchId()
     sai_deserialize_object_id(keys[0], gSwitchId);
     SWSS_LOG_NOTICE("Switch_id : %s", keys[0].c_str());
 }
-bool DemoOrchDaemon::init()
+bool EcmpAppOrchDaemon::init()
 {
     SWSS_LOG_ENTER();
 
@@ -94,14 +94,14 @@ bool DemoOrchDaemon::init()
         return false;
     }
     initSwitchId();
-    gDemoOrch = new DemoOrch(m_stateDb, "NHG_MAP_TABLE");
-    m_orchList = {gDemoOrch};
+    gEcmpStatOrch = new EcmpStatOrch(m_stateDb, "NHG_MAP_TABLE");
+    m_orchList = {gEcmpStatOrch};
 
 
     return true;
 }
 
-void DemoOrchDaemon::start()
+void EcmpAppOrchDaemon::start()
 {
     SWSS_LOG_ENTER();
 

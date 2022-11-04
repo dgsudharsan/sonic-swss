@@ -758,7 +758,7 @@ void CoppOrch::doTask(SelectableTimer &timer)
 
             std::unordered_set<std::string> counter_stats;
             FlowCounterHandler::getGenericCounterStatIdList(counter_stats);
-            m_trap_counter_manager.setCounterIdList(it->first, CounterType::HOSTIF_TRAP, counter_stats);
+            m_trap_counter_manager.setCounterIdList(it->first, CounterType::FLOW_COUNTER, counter_stats);
             it = m_pendingAddToFlexCntr.erase(it);
         }
         else

@@ -29,7 +29,7 @@ dist_swss_DATA = \
 		 tunnel_rates.lua \
 		 trap_rates.lua
 
-bin_PROGRAMS = orchagent routeresync orchagent_restart_check demo_orchagent
+bin_PROGRAMS = orchagent routeresync orchagent_restart_check ecmp_app_orch
 
 if DEBUG
 DBGFLAGS = -ggdb -DDEBUG
@@ -124,10 +124,10 @@ orchagent_restart_check_SOURCES = orchagent_restart_check.cpp
 orchagent_restart_check_CPPFLAGS = $(DBGFLAGS) $(AM_CPPFLAGS) $(CFLAGS_COMMON) $(CFLAGS_ASAN)
 orchagent_restart_check_LDADD = $(LDFLAGS_ASAN) -lhiredis -lswsscommon -lpthread
 
-demo_orchagent_SOURCES = \
-            demo_main.cpp \
-            demoorchdaemon.cpp \
-            demoorch.cpp \
+ecmp_app_orch_SOURCES = \
+            ecmp_app_main.cpp \
+            ecmpapp_orchdaemon.cpp \
+            ecmpstatorch.cpp \
             orch.cpp \
             request_parser.cpp \
             response_publisher.cpp \
@@ -137,9 +137,9 @@ demo_orchagent_SOURCES = \
             saiattr.cpp 
 
 
-demo_orchagent_CFLAGS = $(DBGFLAGS) $(AM_CFLAGS) $(CFLAGS_COMMON) $(CFLAGS_SAI) $(CFLAGS_ASAN)
-demo_orchagent_CPPFLAGS = $(DBGFLAGS) $(AM_CFLAGS) $(CFLAGS_COMMON) $(CFLAGS_SAI) $(CFLAGS_ASAN)
-demo_orchagent_LDADD = $(LDFLAGS_ASAN) -lnl-3 -lnl-route-3 -lpthread -lsairedis -lsaimeta -lsaimetadata -lswsscommon -lzmq
+ecmp_app_orch_CFLAGS = $(DBGFLAGS) $(AM_CFLAGS) $(CFLAGS_COMMON) $(CFLAGS_SAI) $(CFLAGS_ASAN)
+ecmp_app_orch_CPPFLAGS = $(DBGFLAGS) $(AM_CFLAGS) $(CFLAGS_COMMON) $(CFLAGS_SAI) $(CFLAGS_ASAN)
+ecmp_app_orch_LDADD = $(LDFLAGS_ASAN) -lnl-3 -lnl-route-3 -lpthread -lsairedis -lsaimeta -lsaimetadata -lswsscommon -lzmq
 if GCOV_ENABLED
 orchagent_LDADD += -lgcovpreload
 routeresync_LDADD += -lgcovpreload

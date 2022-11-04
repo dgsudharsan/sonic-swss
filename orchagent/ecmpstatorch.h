@@ -12,10 +12,10 @@ extern "C" {
 }
 
 
-class DemoOrch : public Orch
+class EcmpStatOrch : public Orch
 {
 public:
-    DemoOrch(swss::DBConnector *db, std::string tableName);
+    EcmpStatOrch(swss::DBConnector *db, std::string tableName);
 
 private:
     sai_object_id_t getPortOid(std::string key);

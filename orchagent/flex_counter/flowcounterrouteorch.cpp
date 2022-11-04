@@ -120,7 +120,7 @@ void FlowCounterRouteOrch::doTask(SelectableTimer &timer)
 
                 std::unordered_set<std::string> counter_stats;
                 FlowCounterHandler::getGenericCounterStatIdList(counter_stats);
-                mRouteFlowCounterMgr.setCounterIdList(inner_iter->second, CounterType::ROUTE, counter_stats);
+                mRouteFlowCounterMgr.setCounterIdList(inner_iter->second, CounterType::FLOW_COUNTER, counter_stats);
 
                 getRouteFlowCounterNameMapKey(vrf_id, ip_prefix, nameMapKey);
                 prefixToCounterMap.emplace_back(nameMapKey, id);

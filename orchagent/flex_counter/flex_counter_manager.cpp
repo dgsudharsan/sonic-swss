@@ -43,8 +43,7 @@ const unordered_map<CounterType, string> FlexCounterManager::counter_id_field_lo
     { CounterType::MACSEC_FLOW,     MACSEC_FLOW_COUNTER_ID_LIST },
     { CounterType::ACL_COUNTER,     ACL_COUNTER_ATTR_ID_LIST },
     { CounterType::TUNNEL,          TUNNEL_COUNTER_ID_LIST },
-    { CounterType::HOSTIF_TRAP,     FLOW_COUNTER_ID_LIST },
-    { CounterType::ROUTE,           FLOW_COUNTER_ID_LIST },
+    { CounterType::FLOW_COUNTER,    FLOW_COUNTER_ID_LIST },
 };
 
 FlexManagerDirectory g_FlexManagerDirectory;
