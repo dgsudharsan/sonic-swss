@@ -6,6 +6,7 @@
 #include "flex_counter_manager.h"
 #include "flow_counter_handler.h"
 #include <unistd.h>
+#include <algorithm>
 
 extern sai_object_id_t gSwitchId;
 extern sai_switch_api_t *sai_switch_api;
@@ -78,39 +79,99 @@ void EcmpStatOrch::doTask(Consumer &consumer)
     }
 }
 
+sai_object_id_t EcmpStatOrch::create_counter(string nh_str, string nhgm_str, string nhg_key)
+{
+    sai_object_id_t nh_obj;
+    sai_deserialize_object_id(nh_str, nh_obj);
+    string nh_ip;
+    sai_attribute_t attr;
+    DBConnector counter_db("COUNTERS_DB", 0);
+    Table *m_counter_table = new Table(&counter_db, "COUNTERS_NHGM_NAME_MAP");
+
+    memset(&attr, 0, sizeof(attr));
+    attr.id = SAI_NEXT_HOP_ATTR_IP;
+
+    sai_status_t status = sai_next_hop_api->get_next_hop_attribute(nh_obj, 1, &attr);
+    if (status != SAI_STATUS_SUCCESS)
+    {
+        SWSS_LOG_ERROR("Unable to obtain ip address for nh: %" PRIx64 "", nh_obj);
+        return SAI_NULL_OBJECT_ID;
+    }
+    nh_ip = sai_serialize_ip_address(attr.value.ipaddr);
+    sai_object_id_t counter_id = SAI_NULL_OBJECT_ID;
+    if (!FlowCounterHandler::createGenericCounter(counter_id))
+    {
+        return SAI_NULL_OBJECT_ID;
+    }
+    memset(&attr, 0, sizeof(attr));
+    attr.id = SAI_NEXT_HOP_GROUP_MEMBER_ATTR_COUNTER_ID;
+    attr.value.oid = counter_id;
+
+    sai_object_id_t nhgm_oid;
+    sai_deserialize_object_id(nhgm_str, nhgm_oid);
+
+    status = sai_next_hop_group_api->set_next_hop_group_member_attribute(nhgm_oid,
+                                                                     &attr);
+
+    if (status != SAI_STATUS_SUCCESS)
+    {
+        SWSS_LOG_ERROR("Unable to set group member attr for oid %" PRIx64 "",nhgm_oid);
+        return SAI_NULL_OBJECT_ID;
+    }
+    string counter_str = sai_serialize_object_id(counter_id);
+    SWSS_LOG_NOTICE("counter %s nh_ip %s", counter_str.c_str(), nh_ip.c_str());
+                    
+    if (!nh_ip.empty())
+    {
+        auto map_key = nhg_key + ":" + nh_ip; 
+        vector<FieldValueTuple> nameMapFvs;
+        nameMapFvs.emplace_back(map_key, counter_str);
+        m_counter_table->set("", nameMapFvs);
+        std::unordered_set<std::string> counter_stats;
+        FlowCounterHandler::getGenericCounterStatIdList(counter_stats);
+        m_nhgm_counter_manager.setCounterIdList(counter_id, CounterType::FLOW_COUNTER, counter_stats);
+    }
+    return counter_id;
+}
+
+void EcmpStatOrch::delete_counter(sai_object_id_t counter_id)
+{
+    DBConnector counter_db("COUNTERS_DB", 0);
+    Table *m_counter_table = new Table(&counter_db, "COUNTERS_NHGM_NAME_MAP");
+    auto counter_str = sai_serialize_object_id(counter_id);
+    m_nhgm_counter_manager.clearCounterIdList(counter_id);
+    SWSS_LOG_NOTICE("Deleting counter %s", counter_str.c_str());
+    vector<FieldValueTuple> counterMapFvs;
+    m_counter_table->get("", counterMapFvs);
+    for  (auto j: counterMapFvs)
+    {
+	const auto &cfield = fvField(j);
+	const auto &cvalue = fvValue(j);
+	if (cvalue == counter_str)
+	{
+            m_counter_table->hdel("", cfield);
+            break;
+        }
+    }
+
+    if (!FlowCounterHandler::removeGenericCounter(counter_id))
+    {
+        SWSS_LOG_ERROR("Unable to remove counter id: %" PRIx64 "", counter_id);
+        return;
+    }
+}
+
 void EcmpStatOrch::delete_nexthop_group_counters(const string &nhg_key)
 {
     SWSS_LOG_NOTICE("Handle deleting key %s", nhg_key.c_str());
 
-    DBConnector counter_db("COUNTERS_DB", 0);
-    Table *m_counter_table = new Table(&counter_db, "COUNTERS_NHGM_NAME_MAP");
-
-    for (const auto &counter_id: counters_oid_map[nhg_key])
+    for (const auto &nh: nhg_to_nh_map[nhg_key])
     {
-        auto counter_str = sai_serialize_object_id(counter_id);
-        m_nhgm_counter_manager.clearCounterIdList(counter_id);
-        SWSS_LOG_NOTICE("Deleting counter %s", counter_str.c_str());
-        vector<FieldValueTuple> counterMapFvs;
-        m_counter_table->get("", counterMapFvs);
-        for  (auto j: counterMapFvs)
-        {
-            const auto &cfield = fvField(j);
-            const auto &cvalue = fvValue(j);
-            if (cvalue == counter_str)
-            {
-                m_counter_table->hdel("", cfield);
-                break;
-            }
-        }
-
-        if (!FlowCounterHandler::removeGenericCounter(counter_id))
-        {
-            SWSS_LOG_ERROR("Unable to remove counter id: %" PRIx64 "", counter_id);
-            continue;
-        }
+        delete_counter(counters_oid_map[nh]);
+        SWSS_LOG_NOTICE("Cleard counter fo nh : %s ", nh.c_str());
+        counters_oid_map.erase(nh);
     }
-    counters_oid_map.erase(nhg_key);
-    SWSS_LOG_NOTICE("Cleard counter fo nh : %s ", nhg_key.c_str());
+    nhg_to_nh_map.erase(nhg_key);
 }
 
 void EcmpStatOrch::create_nexthop_group_counters(const string &nhg_key, const string &oid)
@@ -118,94 +179,62 @@ void EcmpStatOrch::create_nexthop_group_counters(const string &nhg_key, const st
     DBConnector asic_db("ASIC_DB", 0);
     string nhgm_table = "ASIC_STATE:SAI_OBJECT_TYPE_NEXT_HOP_GROUP_MEMBER";
     Table *nhgmTable = new Table(&asic_db, nhgm_table);
-    DBConnector counter_db("COUNTERS_DB", 0);
-    Table *m_counter_table = new Table(&counter_db, "COUNTERS_NHGM_NAME_MAP");
     std::vector<string> keys;
     nhgmTable->getKeys(keys);
+    std::vector<string> nh_ids;
+    std::map<string, string> nhgm_map;
 
     for (const auto &key: keys)
     {
-        std::vector<FieldValueTuple> feature_fvs;
-        nhgmTable->get(key, feature_fvs);
+        std::vector<FieldValueTuple> nhgm_fvs;
+        nhgmTable->get(key, nhgm_fvs);
 
-        string nh_ip;
-        sai_object_id_t counter_id = SAI_NULL_OBJECT_ID;
-        string counter_str;
-        vector<FieldValueTuple> nameMapFvs;
-
-        for (auto i : feature_fvs)
+        string nh_id = "", nhg_id = "";
+        for (auto i : nhgm_fvs)
         {
             const auto &field = fvField(i);
             const auto &value = fvValue(i);
 
             if (field == "SAI_NEXT_HOP_GROUP_MEMBER_ATTR_NEXT_HOP_GROUP_ID")
             {
-                if (value == oid)
-                {
-                    SWSS_LOG_NOTICE("Found nghm %s", key.c_str());
-                    if (!FlowCounterHandler::createGenericCounter(counter_id))
-                    {
-                        return;
-                    }
-                    sai_attribute_t attr;
-                    attr.id = SAI_NEXT_HOP_GROUP_MEMBER_ATTR_COUNTER_ID;
-                    attr.value.oid = counter_id;
-
-                    sai_object_id_t nhgm_oid;
-                    sai_deserialize_object_id(key, nhgm_oid);
-
-                    sai_status_t status = sai_next_hop_group_api->set_next_hop_group_member_attribute(nhgm_oid,
-                                                                     &attr);
-
-                    if (status != SAI_STATUS_SUCCESS)
-                    {
-                        SWSS_LOG_ERROR("Unable to set group member attr for oid %" PRIx64 "",nhgm_oid);
-                        return;
-                    }
-                    counter_str = sai_serialize_object_id(counter_id);
-                    SWSS_LOG_NOTICE("counter %s nh_ip %s", counter_str.c_str(), nh_ip.c_str());
-                    
-                    counters_oid_map[nhg_key].emplace_back(counter_id);
-                    if (!nh_ip.empty())
-                    {
-                        auto map_key = nhg_key + ":" + nh_ip; 
-                        nameMapFvs.emplace_back(map_key, counter_str);
-                        m_counter_table->set("", nameMapFvs);
-                        std::unordered_set<std::string> counter_stats;
-                        FlowCounterHandler::getGenericCounterStatIdList(counter_stats);
-                        m_nhgm_counter_manager.setCounterIdList(counter_id, CounterType::FLOW_COUNTER, counter_stats);
-                    }
-                }
-            } 
+                nhg_id = value;
+            }
             else if (field == "SAI_NEXT_HOP_GROUP_MEMBER_ATTR_NEXT_HOP_ID")
             {
-                sai_object_id_t nh_obj;
-                sai_deserialize_object_id(value, nh_obj);
+                nh_id = value;
+                nhgm_map[nh_id] = key;
+            }
+        }
 
-                sai_attribute_t attr;
-                memset(&attr, 0, sizeof(attr));
-                attr.id = SAI_NEXT_HOP_ATTR_IP;
+        if (nhg_id == oid)
+        {
+            nh_ids.emplace_back(nh_id);
+        }
 
-                sai_status_t status = sai_next_hop_api->get_next_hop_attribute(nh_obj, 1, &attr);
-                if (status != SAI_STATUS_SUCCESS)
-                {
-                    SWSS_LOG_ERROR("Unable to obtain ip address for nh: %" PRIx64 "", nh_obj);
-                    continue;
-                }
-                nh_ip = sai_serialize_ip_address(attr.value.ipaddr);
-                SWSS_LOG_NOTICE("counter %s nh_ip %s", counter_str.c_str(), nh_ip.c_str());
-                if (counter_id != SAI_NULL_OBJECT_ID)
-                {
-                    auto map_key = nhg_key + ":" + nh_ip; 
-                    nameMapFvs.emplace_back(map_key, counter_str);
-                    m_counter_table->set("", nameMapFvs);
-                    std::unordered_set<std::string> counter_stats;
-                    FlowCounterHandler::getGenericCounterStatIdList(counter_stats);
-                    m_nhgm_counter_manager.setCounterIdList(counter_id, CounterType::FLOW_COUNTER, counter_stats);
-                }
+    }
+
+    for (auto &nh: nhg_to_nh_map[nhg_key])
+    {
+        if (std::find(nh_ids.begin(), nh_ids.end(), nh) == nh_ids.end())
+        {
+            delete_counter(counters_oid_map[nh]);
+            counters_oid_map.erase(nh);
+        }
+    }
+
+    for (auto &nh: nh_ids)
+    {
+        if (std::find(nhg_to_nh_map[nhg_key].begin(), nhg_to_nh_map[nhg_key].end(), nh) == nhg_to_nh_map[nhg_key].end())
+        {
+            auto counter_id = create_counter(nh, nhgm_map[nh], nhg_key);
+            if (counter_id != SAI_NULL_OBJECT_ID)
+            {
+                counters_oid_map[nh] = counter_id;
             }
         }
     }
+    nhg_to_nh_map[nhg_key] = nh_ids;
+
 }
 
 void EcmpStatOrch::handleSetCommand(const string& key, const vector<FieldValueTuple>& data)
@@ -223,8 +252,6 @@ void EcmpStatOrch::handleSetCommand(const string& key, const vector<FieldValueTu
             {
                 sleep(5);
                 create_nexthop_group_counters(key, value);
-                sai_oid_map[key] = value;
-                
             }
         }
         catch (const exception& e)
@@ -244,5 +271,4 @@ void EcmpStatOrch::handleDelCommand(const string& key)
 {
     SWSS_LOG_ENTER();
     delete_nexthop_group_counters(key);
-    sai_oid_map.erase(key);
 }

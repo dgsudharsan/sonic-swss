@@ -814,7 +814,7 @@ bool NextHopGroup::update(const NextHopGroupKey& nhg_key)
         /* If the member is updated, update it's weight. */
         else
         {
-            if (!mbr_it.second.updateWeight(new_nh_key_it->weight))
+            if (new_nh_key_it->weight && !mbr_it.second.updateWeight(new_nh_key_it->weight))
             {
                 SWSS_LOG_WARN("Failed to update member %s weight", nh_key.to_string().c_str());
                 return false;
@@ -857,6 +857,12 @@ bool NextHopGroup::update(const NextHopGroupKey& nhg_key)
         SWSS_LOG_WARN("Failed to sync new members for group %s", to_string().c_str());
         return false;
     }
+    DBConnector state_db("STATE_DB", 0);
+    Table *m_stateNhgTbl = new Table(&state_db, "NHG_MAP_TABLE");
+    FieldValueTuple tuple("sai_oid", sai_serialize_object_id(m_id));
+    vector<FieldValueTuple> fields;
+    fields.push_back(tuple);
+    m_stateNhgTbl->set(g_index, fields);
 
     return true;
 }
