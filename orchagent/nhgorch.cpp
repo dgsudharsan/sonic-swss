@@ -262,7 +262,7 @@ void NhgOrch::doTask(Consumer& consumer)
                 {
                     m_syncdNextHopGroups.erase(nhg_it);
                     DBConnector state_db("STATE_DB", 0);
-                    Table *m_stateNhgTbl = new Table(&state_db, "NHG_MAP_TABLE");
+                    Table *m_stateNhgTbl = new Table(&state_db, "NEXTHOP_GROUP_TABLE");
                     m_stateNhgTbl->del(index);
                 }
             }
@@ -608,8 +608,8 @@ bool NextHopGroup::sync()
             return false;
         }
         DBConnector state_db("STATE_DB", 0);
-        Table *m_stateNhgTbl = new Table(&state_db, "NHG_MAP_TABLE");
-        FieldValueTuple tuple("sai_oid", sai_serialize_object_id(m_id));
+        Table *m_stateNhgTbl = new Table(&state_db, "NEXTHOP_GROUP_TABLE");
+        FieldValueTuple tuple("oid", sai_serialize_object_id(m_id));
         vector<FieldValueTuple> fields;
         fields.push_back(tuple);
         m_stateNhgTbl->set(g_index, fields);
@@ -858,8 +858,8 @@ bool NextHopGroup::update(const NextHopGroupKey& nhg_key)
         return false;
     }
     DBConnector state_db("STATE_DB", 0);
-    Table *m_stateNhgTbl = new Table(&state_db, "NHG_MAP_TABLE");
-    FieldValueTuple tuple("sai_oid", sai_serialize_object_id(m_id));
+    Table *m_stateNhgTbl = new Table(&state_db, "NEXTHOP_GROUP_TABLE");
+    FieldValueTuple tuple("oid", sai_serialize_object_id(m_id));
     vector<FieldValueTuple> fields;
     fields.push_back(tuple);
     m_stateNhgTbl->set(g_index, fields);

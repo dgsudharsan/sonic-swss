@@ -7,6 +7,8 @@
 #include "flow_counter_handler.h"
 #include <unistd.h>
 #include <algorithm>
+#include "tokenize.h"
+#include "timer.h"
 
 extern sai_object_id_t gSwitchId;
 extern sai_switch_api_t *sai_switch_api;
@@ -17,11 +19,18 @@ extern sai_next_hop_api_t* sai_next_hop_api;
 using namespace std;
 using namespace swss;
 #define NHGM_TRAP_FLEX_COUNTER_GROUP "NHGM_TRAP_FLOW_COUNTER"
+#define FLEX_COUNTER_UPD_INTERVAL 1
 
 EcmpStatOrch::EcmpStatOrch(DBConnector *db, string tableName):
     Orch(db, tableName),
     m_nhgm_counter_manager(NHGM_TRAP_FLEX_COUNTER_GROUP, StatsMode::READ, 1000, true)
 {
+    m_asic_db = std::shared_ptr<DBConnector>(new DBConnector("ASIC_DB", 0));
+    m_vidToRidTable = std::unique_ptr<Table>(new Table(m_asic_db.get(), "VIDTORID"));
+    auto intervT = timespec { .tv_sec = FLEX_COUNTER_UPD_INTERVAL , .tv_nsec = 0 };
+    m_FlexCounterUpdTimer = new SelectableTimer(intervT);
+    auto executorT = new ExecutableTimer(m_FlexCounterUpdTimer, this, "FLEX_COUNTER_UPD_TIMER");
+    Orch::addExecutor(executorT);
 }
 
 sai_object_id_t EcmpStatOrch::getPortOid(string key)
@@ -79,6 +88,35 @@ void EcmpStatOrch::doTask(Consumer &consumer)
     }
 }
 
+void EcmpStatOrch::doTask(SelectableTimer &timer)
+{
+    SWSS_LOG_ENTER();
+
+    string value;
+    for (auto it = m_pendingAddToFlexCntr.begin(); it != m_pendingAddToFlexCntr.end(); )
+    {
+        const auto id = sai_serialize_object_id(it->first);
+        if (m_vidToRidTable->hget("", id, value))
+        {
+            SWSS_LOG_NOTICE("Registering %s, id %s", it->second.c_str(), id.c_str());
+
+            std::unordered_set<std::string> counter_stats;
+            FlowCounterHandler::getGenericCounterStatIdList(counter_stats);
+            m_nhgm_counter_manager.setCounterIdList(it->first, CounterType::FLOW_COUNTER, counter_stats);
+            it = m_pendingAddToFlexCntr.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    if (m_pendingAddToFlexCntr.empty())
+    {
+        m_FlexCounterUpdTimer->stop();
+    }
+}
+
 sai_object_id_t EcmpStatOrch::create_counter(string nh_str, string nhgm_str, string nhg_key)
 {
     sai_object_id_t nh_obj;
@@ -127,9 +165,13 @@ sai_object_id_t EcmpStatOrch::create_counter(string nh_str, string nhgm_str, str
         vector<FieldValueTuple> nameMapFvs;
         nameMapFvs.emplace_back(map_key, counter_str);
         m_counter_table->set("", nameMapFvs);
-        std::unordered_set<std::string> counter_stats;
-        FlowCounterHandler::getGenericCounterStatIdList(counter_stats);
-        m_nhgm_counter_manager.setCounterIdList(counter_id, CounterType::FLOW_COUNTER, counter_stats);
+        auto was_empty = m_pendingAddToFlexCntr.empty();
+        m_pendingAddToFlexCntr[counter_id] = map_key;
+
+        if (was_empty)
+        {
+            m_FlexCounterUpdTimer->start();
+        }
     }
     return counter_id;
 }
@@ -138,8 +180,19 @@ void EcmpStatOrch::delete_counter(sai_object_id_t counter_id)
 {
     DBConnector counter_db("COUNTERS_DB", 0);
     Table *m_counter_table = new Table(&counter_db, "COUNTERS_NHGM_NAME_MAP");
+
     auto counter_str = sai_serialize_object_id(counter_id);
-    m_nhgm_counter_manager.clearCounterIdList(counter_id);
+
+    auto update_iter = m_pendingAddToFlexCntr.find(counter_id);
+    if (update_iter == m_pendingAddToFlexCntr.end())
+    {
+        m_nhgm_counter_manager.clearCounterIdList(counter_id);
+    }
+    else
+    {
+        m_pendingAddToFlexCntr.erase(update_iter);
+    }
+
     SWSS_LOG_NOTICE("Deleting counter %s", counter_str.c_str());
     vector<FieldValueTuple> counterMapFvs;
     m_counter_table->get("", counterMapFvs);
@@ -174,11 +227,26 @@ void EcmpStatOrch::delete_nexthop_group_counters(const string &nhg_key)
     nhg_to_nh_map.erase(nhg_key);
 }
 
+string EcmpStatOrch::get_nhg_oid(string oid_list)
+{
+    vector<string> oids = tokenize(oid_list, ',');
+    sai_object_id_t sai_oid;
+
+    for (auto &oid: oids)
+    {
+        sai_deserialize_object_id(oid, sai_oid);
+        if (sai_object_type_query(sai_oid) == SAI_OBJECT_TYPE_NEXT_HOP_GROUP)
+        {
+            return oid;
+        }
+    }
+    return "";
+}
+
 void EcmpStatOrch::create_nexthop_group_counters(const string &nhg_key, const string &oid)
 {
-    DBConnector asic_db("ASIC_DB", 0);
     string nhgm_table = "ASIC_STATE:SAI_OBJECT_TYPE_NEXT_HOP_GROUP_MEMBER";
-    Table *nhgmTable = new Table(&asic_db, nhgm_table);
+    Table *nhgmTable = new Table(m_asic_db.get(), nhgm_table);
     std::vector<string> keys;
     nhgmTable->getKeys(keys);
     std::vector<string> nh_ids;
@@ -248,10 +316,17 @@ void EcmpStatOrch::handleSetCommand(const string& key, const vector<FieldValueTu
 
         try
         {
-            if (field == "sai_oid")
+            if (field == "oid")
             {
-                sleep(5);
-                create_nexthop_group_counters(key, value);
+                auto nh_oid = get_nhg_oid(value);
+                if (nh_oid == "")
+                {
+                    delete_nexthop_group_counters(key);
+                }
+                else
+                {
+                    create_nexthop_group_counters(key, nh_oid);
+                }
             }
         }
         catch (const exception& e)

@@ -94,7 +94,7 @@ bool EcmpAppOrchDaemon::init()
         return false;
     }
     initSwitchId();
-    gEcmpStatOrch = new EcmpStatOrch(m_stateDb, "NHG_MAP_TABLE");
+    gEcmpStatOrch = new EcmpStatOrch(m_stateDb, "NEXTHOP_GROUP_TABLE");
     m_orchList = {gEcmpStatOrch};
 
 
