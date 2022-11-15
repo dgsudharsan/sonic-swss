@@ -237,8 +237,10 @@ void Consumer::execute()
 
 void Consumer::drain()
 {
+    AppEntryContext::set_table_name(getTableName());
     if (!m_toSync.empty())
         m_orch->doTask(*this);
+    AppEntryContext::reset_table_name();
 }
 
 string Consumer::dumpTuple(const KeyOpFieldsValuesTuple &tuple)

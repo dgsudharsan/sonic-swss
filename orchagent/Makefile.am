@@ -94,7 +94,8 @@ orchagent_SOURCES = \
             bfdorch.cpp \
             srv6orch.cpp \
             response_publisher.cpp \
-            nvgreorch.cpp
+            nvgreorch.cpp \
+            appentrycontext.cpp
 
 orchagent_SOURCES += flex_counter/flex_counter_manager.cpp flex_counter/flex_counter_stat_manager.cpp flex_counter/flow_counter_handler.cpp flex_counter/flowcounterrouteorch.cpp
 orchagent_SOURCES += debug_counter/debug_counter.cpp debug_counter/drop_counter.cpp
@@ -134,7 +135,8 @@ ecmp_app_orch_SOURCES = \
             saihelper.cpp \
             flex_counter/flow_counter_handler.cpp \
             flex_counter/flex_counter_manager.cpp \
-            saiattr.cpp 
+            saiattr.cpp  \
+            appentrycontext.cpp
 
 
 ecmp_app_orch_CFLAGS = $(DBGFLAGS) $(AM_CFLAGS) $(CFLAGS_COMMON) $(CFLAGS_SAI) $(CFLAGS_ASAN)

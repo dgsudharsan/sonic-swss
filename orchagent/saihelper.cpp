@@ -3,6 +3,13 @@ extern "C" {
 #include "sai.h"
 #include "saistatus.h"
 #include "saiextensions.h"
+typedef sai_status_t (*sai_create_sai_oid_fn)(
+        _Out_ sai_object_id_t *oid,
+        _In_ sai_object_id_t switch_id,
+        _In_ uint32_t attr_count,
+        _In_ const sai_attribute_t *attr_list);
+typedef sai_status_t (*sai_remove_sai_oid_fn)(
+        _Out_ sai_object_id_t oid);
 }
 
 #include <inttypes.h>
@@ -20,6 +27,7 @@ extern "C" {
 #include "sai_serialize.h"
 #include "saihelper.h"
 #include "orch.h"
+#include "appentrycontext.h"
 
 using namespace std;
 using namespace swss;
@@ -150,6 +158,101 @@ const sai_service_method_table_t test_services = {
     test_profile_get_next_value
 };
 
+#define sai_api_wrapper(api) \
+static sai_create_sai_oid_fn create_ ## api ## _orig; \
+static sai_remove_sai_oid_fn remove_ ## api ## _orig; \
+static sai_status_t create_ ## api ## _ext( \
+        sai_object_id_t *oid, \
+        sai_object_id_t switch_id, \
+        uint32_t attr_count, \
+        const sai_attribute_t *attr_list) \
+{ \
+    sai_status_t status = create_ ## api ## _orig(oid, switch_id, attr_count, attr_list); \
+    AppEntryContext::add_oid(*oid); \
+    return status; \
+} \
+static sai_status_t remove_ ## api ## _ext( \
+        sai_object_id_t oid) \
+{ \
+    sai_status_t status = remove_ ## api ## _orig(oid); \
+    AppEntryContext::remove_oid(oid); \
+    return status; \
+}
+
+#define sai_bulk_api_wrapper(api) \
+static sai_bulk_object_create_fn bulk_create_ ## api ## _orig; \
+static sai_bulk_object_remove_fn bulk_remove_ ## api ## _orig; \
+static sai_status_t bulk_create_ ## api ## _ext( \
+        sai_object_id_t switch_id, \
+        uint32_t object_count, \
+        const uint32_t *attr_count, \
+        const sai_attribute_t **attr_list, \
+        sai_bulk_op_error_mode_t mode, \
+        sai_object_id_t *object_id, \
+        sai_status_t *object_statuses) \
+{ \
+    sai_status_t status = bulk_create_ ## api ## _orig(switch_id, object_count, attr_count, attr_list, mode, object_id, object_statuses); \
+    for (size_t i = 0; i < object_count; i++) \
+    { \
+        AppEntryContext::add_oid(object_id[i]); \
+    } \
+    return status; \
+} \
+static sai_status_t bulk_remove_ ## api ## _ext( \
+        uint32_t object_count, \
+        const sai_object_id_t *object_id, \
+        sai_bulk_op_error_mode_t mode, \
+        sai_status_t *object_statuses) \
+{ \
+    sai_status_t status = bulk_remove_ ## api ## _orig(object_count, object_id, mode, object_statuses); \
+    for (size_t i = 0; i < object_count; i++) \
+    { \
+        AppEntryContext::remove_oid(object_id[i]); \
+    } \
+    return status; \
+}
+
+#define sai_api_struct_wrapper(api, api_struct) \
+static sai_ ## api ## _api_t sai_ ## api_struct ## _api_ext;
+
+#define sai_api_wrap(api_struct, api) \
+    do { \
+        create_ ## api ## _orig = api_struct->create_ ## api; \
+        remove_ ## api ## _orig = api_struct->remove_ ## api; \
+        api_struct->create_ ## api = create_ ## api ## _ext; \
+        api_struct->remove_ ## api = remove_ ## api ## _ext; \
+    } while(0);
+
+#define sai_bulk_api_wrap(api_struct, api) \
+    do { \
+        bulk_create_ ## api ## _orig = api_struct->create_ ## api ## s; \
+        bulk_remove_ ## api ## _orig = api_struct->remove_ ## api ## s; \
+        api_struct->create_ ## api ## s = bulk_create_ ## api ## _ext; \
+        api_struct->remove_ ## api ## s = bulk_remove_ ## api ## _ext; \
+    } while(0);
+
+#define sai_api_struct_wrap(api_struct) \
+    do { \
+        sai_ ## api_struct ## _api_ext = *sai_ ## api_struct ## _api; \
+        sai_ ## api_struct ## _api = &sai_ ## api_struct ## _api_ext; \
+    } while(0);
+
+sai_api_wrapper(virtual_router)
+sai_api_struct_wrapper(virtual_router, virtual_router)
+sai_api_wrapper(vlan)
+sai_api_wrapper(vlan_member)
+sai_api_struct_wrapper(vlan, vlan)
+sai_api_wrapper(port)
+sai_api_struct_wrapper(port, port)
+sai_api_wrapper(router_interface)
+sai_api_struct_wrapper(router_interface, router_intfs)
+sai_api_wrapper(next_hop)
+sai_api_struct_wrapper(next_hop, next_hop)
+sai_api_wrapper(next_hop_group)
+sai_api_wrapper(next_hop_group_member)
+sai_bulk_api_wrapper(next_hop_group_member)
+sai_api_struct_wrapper(next_hop_group, next_hop_group)
+
 void initSaiApi(bool clientSai)
 {
     SWSS_LOG_ENTER();
@@ -170,15 +273,31 @@ void initSaiApi(bool clientSai)
     sai_api_query(SAI_API_SWITCH,               (void **)&sai_switch_api);
     sai_api_query(SAI_API_BRIDGE,               (void **)&sai_bridge_api);
     sai_api_query(SAI_API_VIRTUAL_ROUTER,       (void **)&sai_virtual_router_api);
+    sai_api_struct_wrap(virtual_router);
+    sai_api_wrap(sai_virtual_router_api, virtual_router);
     sai_api_query(SAI_API_PORT,                 (void **)&sai_port_api);
+    sai_api_struct_wrap(port);
+    sai_api_wrap(sai_port_api, port);
     sai_api_query(SAI_API_FDB,                  (void **)&sai_fdb_api);
     sai_api_query(SAI_API_VLAN,                 (void **)&sai_vlan_api);
+    sai_api_struct_wrap(vlan);
+    sai_api_wrap(sai_vlan_api, vlan);
+    /* sai_api_struct_wrap(vlan_member); */
+    sai_api_wrap(sai_vlan_api, vlan_member);
     sai_api_query(SAI_API_HOSTIF,               (void **)&sai_hostif_api);
     sai_api_query(SAI_API_MIRROR,               (void **)&sai_mirror_api);
     sai_api_query(SAI_API_ROUTER_INTERFACE,     (void **)&sai_router_intfs_api);
+    sai_api_struct_wrap(router_intfs);
+    sai_api_wrap(sai_router_intfs_api, router_interface);
     sai_api_query(SAI_API_NEIGHBOR,             (void **)&sai_neighbor_api);
     sai_api_query(SAI_API_NEXT_HOP,             (void **)&sai_next_hop_api);
+    sai_api_struct_wrap(next_hop);
+    sai_api_wrap(sai_next_hop_api, next_hop);
     sai_api_query(SAI_API_NEXT_HOP_GROUP,       (void **)&sai_next_hop_group_api);
+    sai_api_struct_wrap(next_hop_group);
+    sai_api_wrap(sai_next_hop_group_api, next_hop_group);
+    sai_api_wrap(sai_next_hop_group_api, next_hop_group_member);
+    sai_bulk_api_wrap(sai_next_hop_group_api, next_hop_group_member);
     sai_api_query(SAI_API_ROUTE,                (void **)&sai_route_api);
     sai_api_query(SAI_API_MPLS,                 (void **)&sai_mpls_api);
     sai_api_query(SAI_API_LAG,                  (void **)&sai_lag_api);

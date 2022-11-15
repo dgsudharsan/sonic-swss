@@ -49,6 +49,7 @@ tests_SOURCES = aclorch_ut.cpp \
                 $(top_srcdir)/lib/subintf.cpp \
                 $(top_srcdir)/orchagent/orchdaemon.cpp \
                 $(top_srcdir)/orchagent/orch.cpp \
+                $(top_srcdir)/orchagent/appentrycontext.cpp \
                 $(top_srcdir)/orchagent/notifications.cpp \
                 $(top_srcdir)/orchagent/routeorch.cpp \
                 $(top_srcdir)/orchagent/mplsrouteorch.cpp \
@@ -129,6 +130,7 @@ tests_LDADD = $(LDADD_GTEST) $(LDADD_SAI) -lnl-genl-3 -lhiredis -lhiredis -lpthr
 tests_intfmgrd_SOURCES = intfmgrd/add_ipv6_prefix_ut.cpp \
                         $(top_srcdir)/cfgmgr/intfmgr.cpp \
                         $(top_srcdir)/orchagent/orch.cpp \
+			$(top_srcdir)/orchagent/appentrycontext.cpp \
                         $(top_srcdir)/orchagent/request_parser.cpp \
                         $(top_srcdir)/lib/subintf.cpp \
                         mock_orchagent_main.cpp \

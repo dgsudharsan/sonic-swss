@@ -229,15 +229,18 @@ void EcmpStatOrch::delete_nexthop_group_counters(const string &nhg_key)
 
 string EcmpStatOrch::get_nhg_oid(string oid_list)
 {
+    SWSS_LOG_ENTER();
     vector<string> oids = tokenize(oid_list, ',');
     sai_object_id_t sai_oid;
+    string prefix = "oid:";
 
     for (auto &oid: oids)
     {
-        sai_deserialize_object_id(oid, sai_oid);
+        auto oid_str = prefix + oid;
+        sai_deserialize_object_id(oid_str, sai_oid);
         if (sai_object_type_query(sai_oid) == SAI_OBJECT_TYPE_NEXT_HOP_GROUP)
         {
-            return oid;
+            return oid_str;
         }
     }
     return "";
@@ -245,6 +248,7 @@ string EcmpStatOrch::get_nhg_oid(string oid_list)
 
 void EcmpStatOrch::create_nexthop_group_counters(const string &nhg_key, const string &oid)
 {
+    SWSS_LOG_ENTER();
     string nhgm_table = "ASIC_STATE:SAI_OBJECT_TYPE_NEXT_HOP_GROUP_MEMBER";
     Table *nhgmTable = new Table(m_asic_db.get(), nhgm_table);
     std::vector<string> keys;
@@ -276,6 +280,7 @@ void EcmpStatOrch::create_nexthop_group_counters(const string &nhg_key, const st
 
         if (nhg_id == oid)
         {
+            SWSS_LOG_INFO("Found nh_id %s", nh_id.c_str());
             nh_ids.emplace_back(nh_id);
         }
 
@@ -316,7 +321,7 @@ void EcmpStatOrch::handleSetCommand(const string& key, const vector<FieldValueTu
 
         try
         {
-            if (field == "oid")
+            if (field == "oids")
             {
                 auto nh_oid = get_nhg_oid(value);
                 if (nh_oid == "")
@@ -325,6 +330,7 @@ void EcmpStatOrch::handleSetCommand(const string& key, const vector<FieldValueTu
                 }
                 else
                 {
+                    //sleep(5);
                     create_nexthop_group_counters(key, nh_oid);
                 }
             }

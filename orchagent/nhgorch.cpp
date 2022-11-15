@@ -17,8 +17,6 @@ extern size_t gMaxBulkSize;
 extern sai_next_hop_group_api_t* sai_next_hop_group_api;
 extern sai_next_hop_api_t*         sai_next_hop_api;
 
-string g_index = "";
-
 NhgOrch::NhgOrch(DBConnector *db, string tableName) : NhgOrchCommon(db, tableName)
 {
     SWSS_LOG_ENTER();
@@ -114,7 +112,6 @@ void NhgOrch::doTask(Consumer& consumer)
                     try
                     {
                         auto nhg = std::make_unique<NextHopGroup>(createTempNhg(nhg_key));
-                        g_index = index;
                         if (nhg->sync())
                         {
                             m_syncdNextHopGroups.emplace(index, NhgEntry<NextHopGroup>(std::move(nhg)));
@@ -136,7 +133,6 @@ void NhgOrch::doTask(Consumer& consumer)
                 else
                 {
                     auto nhg = std::make_unique<NextHopGroup>(nhg_key, false);
-                    g_index = index;
                     success = nhg->sync();
 
                     if (success)
@@ -179,7 +175,6 @@ void NhgOrch::doTask(Consumer& consumer)
                             * don't mess up the reference counter, as other
                             * objects may already reference it.
                             */
-                            g_index = index;
                             if (new_nhg->sync())
                             {
                                 nhg_it->second.nhg = std::move(new_nhg);
@@ -206,7 +201,6 @@ void NhgOrch::doTask(Consumer& consumer)
                 else if (nhg_ptr->isTemp())
                 {
                     auto nhg = std::make_unique<NextHopGroup>(nhg_key, false);
-                    g_index = index;
                     success = nhg->sync();
 
                     if (success)
@@ -261,9 +255,6 @@ void NhgOrch::doTask(Consumer& consumer)
                 if (success)
                 {
                     m_syncdNextHopGroups.erase(nhg_it);
-                    DBConnector state_db("STATE_DB", 0);
-                    Table *m_stateNhgTbl = new Table(&state_db, "NEXTHOP_GROUP_TABLE");
-                    m_stateNhgTbl->del(index);
                 }
             }
         }
@@ -607,13 +598,6 @@ bool NextHopGroup::sync()
                             to_string().c_str());
             return false;
         }
-        DBConnector state_db("STATE_DB", 0);
-        Table *m_stateNhgTbl = new Table(&state_db, "NEXTHOP_GROUP_TABLE");
-        FieldValueTuple tuple("oid", sai_serialize_object_id(m_id));
-        vector<FieldValueTuple> fields;
-        fields.push_back(tuple);
-        m_stateNhgTbl->set(g_index, fields);
-
     }
 
     return true;
@@ -857,12 +841,6 @@ bool NextHopGroup::update(const NextHopGroupKey& nhg_key)
         SWSS_LOG_WARN("Failed to sync new members for group %s", to_string().c_str());
         return false;
     }
-    DBConnector state_db("STATE_DB", 0);
-    Table *m_stateNhgTbl = new Table(&state_db, "NEXTHOP_GROUP_TABLE");
-    FieldValueTuple tuple("oid", sai_serialize_object_id(m_id));
-    vector<FieldValueTuple> fields;
-    fields.push_back(tuple);
-    m_stateNhgTbl->set(g_index, fields);
 
     return true;
 }

@@ -21,6 +21,7 @@ extern "C" {
 #include "selectabletimer.h"
 #include "macaddress.h"
 #include "response_publisher.h"
+#include "appentrycontext.h"
 
 const char delimiter           = ':';
 const char list_item_delimiter = ',';
@@ -78,7 +79,49 @@ typedef std::pair<std::string, sai_object_id_t> object_map_pair;
 // Use multimap to support multiple OpFieldsValues for the same key (e,g, DEL and SET)
 // The order of the key-value pairs whose keys compare equivalent is the order of
 // insertion and does not change. (since C++11)
-typedef std::multimap<std::string, swss::KeyOpFieldsValuesTuple> SyncMap;
+/* typedef std::multimap<std::string, swss::KeyOpFieldsValuesTuple> SyncMap; */
+class SyncMap: public std::multimap<std::string, swss::KeyOpFieldsValuesTuple>
+{
+    public:
+        std::multimap<std::string, swss::KeyOpFieldsValuesTuple>::iterator begin()
+        {
+            /* SWSS_LOG_ERROR("marianp begin"); */
+            auto it = std::multimap<std::string, swss::KeyOpFieldsValuesTuple>::begin();
+
+            if (it != std::multimap<std::string, swss::KeyOpFieldsValuesTuple>::end())
+            {
+                AppEntryContext::set_key(kfvKey(it->second));
+            }
+
+            return it;
+        }
+
+        std::multimap<std::string, swss::KeyOpFieldsValuesTuple>::iterator erase(
+                std::multimap<std::string, swss::KeyOpFieldsValuesTuple>::iterator pos)
+        {
+            /* SWSS_LOG_ERROR("marianp erase"); */
+            auto it = std::multimap<std::string, swss::KeyOpFieldsValuesTuple>::erase(pos);
+
+            if (it != std::multimap<std::string, swss::KeyOpFieldsValuesTuple>::end())
+            {
+                AppEntryContext::set_key(kfvKey(it->second));
+            }
+            else
+            {
+                AppEntryContext::reset_key();
+            }
+
+            return it;
+        }
+
+        size_t erase(
+                const std::string& pos)
+        {
+            /* SWSS_LOG_ERROR("marianp erase string"); */
+            AppEntryContext::reset_key();
+            return std::multimap<std::string, swss::KeyOpFieldsValuesTuple>::erase(pos);
+        }
+};
 
 typedef std::pair<std::string, int> table_name_with_pri_t;
 
