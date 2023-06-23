@@ -568,6 +568,17 @@ PortsOrch::PortsOrch(DBConnector *db, DBConnector *stateDb, vector<table_name_wi
         }
     }
 
+    sai_attr_capability_t attr_cap;
+    if (sai_query_attribute_capability(gSwitchId, SAI_OBJECT_TYPE_PORT,
+                                       SAI_PORT_ATTR_AUTO_NEG_FEC_MODE_OVERRIDE,
+                                       &attr_cap) != SAI_STATUS_SUCCESS)
+    {
+        SWSS_LOG_NOTICE("Unable to query autoneg fec mode override");
+    }
+    else if (attr_cap.set_implemented && attr_cap.create_implemented)
+    {
+        fec_override_sup = true;
+    }
 
     supported_flood_control_types.assign(max_flood_control_types, 0);
     values.count = max_flood_control_types;
@@ -2142,7 +2153,6 @@ void PortsOrch::getPortSupportedFecModes(const std::string& alias, sai_object_id
 {
     sai_attribute_t attr;
     sai_status_t status;
-    sai_attr_capability_t attr_cap;
     vector<sai_int32_t> fecModes(fec_mode_reverse_map.size());
 
     attr.id = SAI_PORT_ATTR_SUPPORTED_FEC_MODE;
@@ -2184,21 +2194,10 @@ void PortsOrch::getPortSupportedFecModes(const std::string& alias, sai_object_id
         supported_fecmodes.clear(); // return empty
     }
 
-    if (sai_query_attribute_capability(gSwitchId, SAI_OBJECT_TYPE_PORT,
-                                       SAI_PORT_ATTR_AUTO_NEG_FEC_MODE_OVERRIDE,
-                                       &attr_cap) != SAI_STATUS_SUCCESS)
+    if (!supported_fecmodes.empty() && fec_override_sup)
     {
-        SWSS_LOG_NOTICE("Unable to query autoneg fec mode override");
+        supported_fecmodes.insert(PORT_FEC_MODE_AUTO);
     }
-    else if (attr_cap.set_implemented && attr_cap.create_implemented)
-    {
-        fec_override_sup = true;
-        if (!supported_fecmodes.empty())
-        {
-            supported_fecmodes.insert(PORT_FEC_MODE_AUTO);
-        }
-    }
-
 }
 
 void PortsOrch::initPortSupportedFecModes(const std::string& alias, sai_object_id_t port_id)
