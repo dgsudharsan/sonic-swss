@@ -4169,72 +4169,6 @@ void PortsOrch::doPortTask(Consumer &consumer)
                     SWSS_LOG_NOTICE("Set port %s link event damping config successfully", p.m_alias.c_str());
                 }
 
-                if (pCfg.speed.is_set)
-                {
-                    if (p.m_speed != pCfg.speed.value)
-                    {
-                        if (!isSpeedSupported(p.m_alias, p.m_port_id, pCfg.speed.value))
-                        {
-                            SWSS_LOG_ERROR(
-                                "Unsupported port %s speed %u",
-                                p.m_alias.c_str(), pCfg.speed.value
-                            );
-                            // Speed not supported, dont retry
-                            it = taskMap.erase(it);
-                            continue;
-                        }
-
-                        // for backward compatible, if autoneg is off, toggle admin status
-                        if (p.m_admin_state_up && !p.m_autoneg)
-                        {
-                            /* Bring port down before applying speed */
-                            if (!setPortAdminStatus(p, false))
-                            {
-                                SWSS_LOG_ERROR(
-                                    "Failed to set port %s admin status DOWN to set speed",
-                                    p.m_alias.c_str()
-                                );
-                                it++;
-                                continue;
-                            }
-
-                            p.m_admin_state_up = false;
-                            m_portList[p.m_alias] = p;
-                        }
-
-                        auto status = setPortSpeed(p, pCfg.speed.value);
-                        if (status != task_success)
-                        {
-                            SWSS_LOG_ERROR(
-                                "Failed to set port %s speed from %u to %u",
-                                p.m_alias.c_str(), p.m_speed, pCfg.speed.value
-                            );
-                            if (status == task_need_retry)
-                            {
-                                it++;
-                            }
-                            else
-                            {
-                                it = taskMap.erase(it);
-                            }
-                            continue;
-                        }
-
-                        p.m_speed = pCfg.speed.value;
-                        m_portList[p.m_alias] = p;
-
-                        SWSS_LOG_NOTICE(
-                            "Set port %s speed to %u",
-                            p.m_alias.c_str(), pCfg.speed.value
-                        );
-                    }
-                    else
-                    {
-                        /* Always update Gearbox speed on Gearbox ports */
-                        setGearboxPortsAttr(p, SAI_PORT_ATTR_SPEED, &pCfg.speed.value);
-                    }
-                }
-
                 if (pCfg.adv_speeds.is_set)
                 {
                     if (!p.m_adv_speed_cfg || p.m_adv_speeds != pCfg.adv_speeds.value)
@@ -4384,6 +4318,72 @@ void PortsOrch::doPortTask(Consumer &consumer)
                             "Set port %s advertised interface type to %s",
                             p.m_alias.c_str(), m_portHlpr.getAdvInterfaceTypesStr(pCfg).c_str()
                         );
+                    }
+                }
+
+                if (pCfg.speed.is_set)
+                {
+                    if (p.m_speed != pCfg.speed.value)
+                    {
+                        if (!isSpeedSupported(p.m_alias, p.m_port_id, pCfg.speed.value))
+                        {
+                            SWSS_LOG_ERROR(
+                                "Unsupported port %s speed %u",
+                                p.m_alias.c_str(), pCfg.speed.value
+                            );
+                            // Speed not supported, dont retry
+                            it = taskMap.erase(it);
+                            continue;
+                        }
+
+                        // for backward compatible, if autoneg is off, toggle admin status
+                        if (p.m_admin_state_up && !p.m_autoneg)
+                        {
+                            /* Bring port down before applying speed */
+                            if (!setPortAdminStatus(p, false))
+                            {
+                                SWSS_LOG_ERROR(
+                                    "Failed to set port %s admin status DOWN to set speed",
+                                    p.m_alias.c_str()
+                                );
+                                it++;
+                                continue;
+                            }
+
+                            p.m_admin_state_up = false;
+                            m_portList[p.m_alias] = p;
+                        }
+
+                        auto status = setPortSpeed(p, pCfg.speed.value);
+                        if (status != task_success)
+                        {
+                            SWSS_LOG_ERROR(
+                                "Failed to set port %s speed from %u to %u",
+                                p.m_alias.c_str(), p.m_speed, pCfg.speed.value
+                            );
+                            if (status == task_need_retry)
+                            {
+                                it++;
+                            }
+                            else
+                            {
+                                it = taskMap.erase(it);
+                            }
+                            continue;
+                        }
+
+                        p.m_speed = pCfg.speed.value;
+                        m_portList[p.m_alias] = p;
+
+                        SWSS_LOG_NOTICE(
+                            "Set port %s speed to %u",
+                            p.m_alias.c_str(), pCfg.speed.value
+                        );
+                    }
+                    else
+                    {
+                        /* Always update Gearbox speed on Gearbox ports */
+                        setGearboxPortsAttr(p, SAI_PORT_ATTR_SPEED, &pCfg.speed.value);
                     }
                 }
 
