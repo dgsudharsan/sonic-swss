@@ -1613,6 +1613,9 @@ void RouteSync::onRouteMsg(int nlmsg_type, struct nl_object *obj, char *vrf)
     {
         sendOffloadReply(route_obj);
     }
+    auto proto_num = rtnl_route_get_protocol(route_obj);
+    auto proto_str = getProtocolString(proto_num);
+    FieldValueTuple proto("protocol", proto_str);
 
     switch (rtnl_route_get_type(route_obj))
     {
@@ -1621,6 +1624,7 @@ void RouteSync::onRouteMsg(int nlmsg_type, struct nl_object *obj, char *vrf)
             vector<FieldValueTuple> fvVector;
             FieldValueTuple fv("blackhole", "true");
             fvVector.push_back(fv);
+            fvVector.push_back(proto);
             m_routeTable.set(destipprefix, fvVector);
             return;
         }
@@ -1692,11 +1696,8 @@ void RouteSync::onRouteMsg(int nlmsg_type, struct nl_object *obj, char *vrf)
         }
     }
 
-    auto proto_num = rtnl_route_get_protocol(route_obj);
-    auto proto_str = getProtocolString(proto_num);
 
     vector<FieldValueTuple> fvVector;
-    FieldValueTuple proto("protocol", proto_str);
     FieldValueTuple gw("nexthop", gw_list);
     FieldValueTuple intf("ifname", intf_list);
 
@@ -1776,6 +1777,10 @@ void RouteSync::onLabelRouteMsg(int nlmsg_type, struct nl_object *obj)
         return;
     }
 
+    auto proto_num = rtnl_route_get_protocol(route_obj);
+    auto proto_str = getProtocolString(proto_num);
+    FieldValueTuple proto("protocol", proto_str);
+
     switch (rtnl_route_get_type(route_obj))
     {
         case RTN_BLACKHOLE:
@@ -1783,6 +1788,7 @@ void RouteSync::onLabelRouteMsg(int nlmsg_type, struct nl_object *obj)
             vector<FieldValueTuple> fvVector;
             FieldValueTuple fv("blackhole", "true");
             fvVector.push_back(fv);
+            fvVector.push_back(proto);
             m_label_routeTable.set(destaddr, fvVector);
             return;
         }
